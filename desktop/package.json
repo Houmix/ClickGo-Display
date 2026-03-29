@@ -1,0 +1,62 @@
+{
+  "name": "clickgo-display-desktop",
+  "version": "1.0.0",
+  "description": "ClickGo Display Desktop Application",
+  "main": "main.js",
+  "productName": "ClickGo Display",
+  "author": "ClickGo Interactive",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:web": "cd .. && npx expo export -p web",
+    "build": "npm run build:web && electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.clickgo.display",
+    "productName": "ClickGo Display",
+    "directories": {
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "ClickGo-Display-Setup.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClickGo Display"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Houmix",
+      "repo": "ClickGo-Display"
+    }
+  }
+}
