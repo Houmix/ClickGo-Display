@@ -1,33 +1,43 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SERVER_KEY   = 'display_server_url';
+const SERVER_KEY    = 'display_server_url';
+const RESTAURANT_KEY = 'display_restaurant_id';
 const DISCOVER_PATH = '/api/sync/discover/';
 const PORT          = 8000;
 const SCAN_TIMEOUT  = 1500;
 
 let _url = '';
+let _restaurantId = '';
 
 export function getPosUrl() { return _url; }
-export function setPosUrl(url: string) { _url = url; }
+export function getRestaurantId() { return _restaurantId; }
 
 export async function loadSavedUrl(): Promise<string | null> {
     const saved = await AsyncStorage.getItem(SERVER_KEY).catch(() => null);
+    const resId = await AsyncStorage.getItem(RESTAURANT_KEY).catch(() => null);
     if (saved) _url = saved;
+    if (resId) _restaurantId = resId;
     return saved;
 }
 
-export async function saveUrl(url: string) {
+export async function saveUrl(url: string, restaurantId?: string) {
     _url = url;
     await AsyncStorage.setItem(SERVER_KEY, url);
+    if (restaurantId) {
+        _restaurantId = restaurantId;
+        await AsyncStorage.setItem(RESTAURANT_KEY, restaurantId);
+    }
 }
 
 export async function clearUrl() {
     _url = '';
+    _restaurantId = '';
     await AsyncStorage.removeItem(SERVER_KEY);
+    await AsyncStorage.removeItem(RESTAURANT_KEY);
 }
 
-export async function testIp(ip: string): Promise<string | null> {
-    const url = `http://${ip}:${PORT}`;
+/** Teste si une URL complète (http://x.x.x.x:8000) répond comme un serveur caisse */
+export async function testUrl(url: string): Promise<{ url: string; restaurantId: string } | null> {
     try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), SCAN_TIMEOUT);
@@ -35,15 +45,24 @@ export async function testIp(ip: string): Promise<string | null> {
         clearTimeout(t);
         if (res.ok) {
             const data = await res.json();
-            if (data.server === 'caisse') return url;
+            if (data.server === 'caisse') {
+                return { url, restaurantId: data.restaurant_id?.toString() || '' };
+            }
         }
     } catch {}
     return null;
 }
 
+/** Teste une IP brute (construit l'URL automatiquement) */
+export async function testIp(ip: string): Promise<{ url: string; restaurantId: string } | null> {
+    // Si c'est déjà une URL complète, tester directement
+    if (ip.startsWith('http')) return testUrl(ip);
+    return testUrl(`http://${ip}:${PORT}`);
+}
+
 export async function scanNetwork(
     onProgress?: (scanned: number, total: number) => void
-): Promise<string | null> {
+): Promise<{ url: string; restaurantId: string } | null> {
     const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '192.168.100'];
     const priority = [1, 2, 100, 101, 50, 200, 254, 10, 20, 30, 40];
 
