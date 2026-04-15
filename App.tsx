@@ -229,7 +229,7 @@ export default function App() {
 
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.headerTitle}>Suivi de commande</Text>
+        <Text style={s.headerTitle}>Suivi de commande{appVersion ? `  v${appVersion}` : ''}</Text>
         <View style={s.headerRight}>
           <View style={s.wsRow}>
             <View style={[s.wsDot, {
