@@ -32,6 +32,7 @@ function createWindow(url) {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
+            webSecurity: false,
         },
         fullscreen: true,
         frame: false,
