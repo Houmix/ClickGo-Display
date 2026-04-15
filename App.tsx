@@ -34,6 +34,14 @@ export default function App() {
   const [wsStatus,  setWsStatus]  = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [clock,     setClock]     = useState(new Date());
 
+  // ── État mise à jour logiciel ──
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('idle');
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const updateProgressAnim = useRef(new Animated.Value(0)).current;
+
   const wsRef        = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,6 +55,41 @@ export default function App() {
   }, []);
 
   useEffect(() => { bootstrap(); return cleanup; }, []);
+
+  // ── Listeners mise à jour ──
+  useEffect(() => {
+    const api = (window as any).updaterAPI;
+    if (!api) return;
+    api.getVersion?.().then((v: string) => { if (v) setAppVersion(v); }).catch(() => {});
+    api.getStatus?.().then((s: any) => {
+      if (s?.status && s.status !== 'idle') { setUpdateStatus(s.status); setUpdateProgress(s.progress || 0); setUpdateVersion(s.version || null); }
+    }).catch(() => {});
+    api.onUpdateAvailable?.((version: string) => { setUpdateStatus('downloading'); setUpdateVersion(version); setUpdateProgress(0); setUpdateError(null); });
+    api.onUpdateProgress?.((pct: number) => {
+      setUpdateStatus('downloading'); setUpdateProgress(pct);
+      Animated.timing(updateProgressAnim, { toValue: pct, duration: 300, useNativeDriver: false }).start();
+    });
+    api.onUpdateDownloaded?.((version: string) => {
+      setUpdateStatus('downloaded'); setUpdateVersion(version); setUpdateProgress(100);
+      Animated.timing(updateProgressAnim, { toValue: 100, duration: 300, useNativeDriver: false }).start();
+    });
+    api.onUpdateNotAvailable?.(() => { setUpdateStatus('not-available'); setUpdateError(null); });
+    api.onUpdateError?.((msg: string) => { setUpdateStatus('error'); setUpdateError(msg || 'Erreur inconnue'); });
+  }, []);
+
+  const checkForUpdate = async () => {
+    const api = (window as any).updaterAPI;
+    if (!api) return;
+    setUpdateStatus('checking'); setUpdateProgress(0); setUpdateError(null);
+    updateProgressAnim.setValue(0);
+    try {
+      const result = await api.checkForUpdate();
+      if (result?.status === 'error') { setUpdateStatus('error'); setUpdateError(result.message); }
+      else if (result?.status === 'noRelease') { setUpdateStatus('not-available'); }
+    } catch { setUpdateStatus('error'); setUpdateError('Impossible de vérifier'); }
+  };
+
+  const installUpdate = () => { (window as any).updaterAPI?.installUpdate(); };
 
   const cleanup = () => {
     if (reconnectRef.current) clearTimeout(reconnectRef.current);
@@ -200,6 +243,9 @@ export default function App() {
           <TouchableOpacity onPress={() => { clearUrl(); bootstrap(); }} style={s.rescanBtn}>
             <Text style={s.rescanText}>Reconnecter</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={checkForUpdate} style={s.rescanBtn} disabled={updateStatus === 'checking' || updateStatus === 'downloading'}>
+            <Text style={s.rescanText}>Mise à jour</Text>
+          </TouchableOpacity>
           <Text style={s.clock}>
             {clock.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </Text>
@@ -249,6 +295,40 @@ export default function App() {
           );
         })}
       </View>
+
+      {/* ── Bandeau mise à jour ── */}
+      {updateStatus !== 'idle' && updateStatus !== 'not-available' && (
+        <View style={s.updateBanner}>
+          {updateStatus === 'checking' && (
+            <><Text style={s.updateText}>Vérification des mises à jour…</Text></>
+          )}
+          {updateStatus === 'downloading' && (
+            <>
+              <View style={s.updateProgressTrack}>
+                <Animated.View style={[s.updateProgressFill, { width: updateProgressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
+              </View>
+              <Text style={s.updateText}>Téléchargement{updateVersion ? ` v${updateVersion}` : ''} — {updateProgress}%</Text>
+            </>
+          )}
+          {updateStatus === 'downloaded' && (
+            <>
+              <Text style={s.updateText}>v{updateVersion} prête !</Text>
+              <TouchableOpacity style={s.updateInstallBtn} onPress={installUpdate}>
+                <Text style={s.updateInstallText}>Installer et redémarrer</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          {updateStatus === 'error' && (
+            <>
+              <Text style={[s.updateText, { color: '#fca5a5' }]}>{updateError || 'Erreur'}</Text>
+              <TouchableOpacity style={s.updateRetryBtn} onPress={checkForUpdate}>
+                <Text style={s.updateRetryText}>Réessayer</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          {appVersion ? <Text style={s.updateVersionLabel}>v{appVersion}</Text> : null}
+        </View>
+      )}
     </View>
   );
 }
@@ -328,4 +408,15 @@ const s = StyleSheet.create({
   orderCard:      { backgroundColor: 'white', borderRadius: 16, padding: 16, borderLeftWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   orderNumber:    { fontSize: 36, fontWeight: '900', textAlign: 'center' },
   orderCustomer:  { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4, fontWeight: '600' },
+
+  // Update banner
+  updateBanner:        { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1e293b', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#334155' },
+  updateText:          { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
+  updateProgressTrack: { width: 120, height: 6, backgroundColor: '#334155', borderRadius: 3, overflow: 'hidden' },
+  updateProgressFill:  { height: '100%' as any, backgroundColor: '#756fbf', borderRadius: 3 },
+  updateInstallBtn:    { backgroundColor: '#10b981', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  updateInstallText:   { color: 'white', fontWeight: '700', fontSize: 12 },
+  updateRetryBtn:      { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  updateRetryText:     { color: 'white', fontWeight: '600', fontSize: 12 },
+  updateVersionLabel:  { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginLeft: 'auto' as any },
 });
