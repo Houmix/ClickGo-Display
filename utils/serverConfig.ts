@@ -4,7 +4,7 @@ const SERVER_KEY    = 'display_server_url';
 const RESTAURANT_KEY = 'display_restaurant_id';
 const DISCOVER_PATH = '/api/sync/discover/';
 const PORT          = 8000;
-const SCAN_TIMEOUT  = 1500;
+const SCAN_TIMEOUT  = 2500;
 
 let _url = '';
 let _restaurantId = '';
@@ -63,7 +63,7 @@ export async function testIp(ip: string): Promise<{ url: string; restaurantId: s
 export async function scanNetwork(
     onProgress?: (scanned: number, total: number) => void
 ): Promise<{ url: string; restaurantId: string } | null> {
-    const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '192.168.100'];
+    const subnets = ['192.168.1', '192.168.0', '192.168.2', '10.0.0', '10.0.1', '192.168.100'];
     const priority = [1, 2, 100, 101, 50, 200, 254, 10, 20, 30, 40];
 
     const ips: string[] = ['127.0.0.1'];
