@@ -112,7 +112,7 @@ export default function App() {
       if (r.ok) {
         const data = await r.json();
         const active = (data.orders || []).filter(
-          (o: DisplayOrder) => !['delivered'].includes(o.kds_status)
+          (o: DisplayOrder) => !['delivered', 'cancelled'].includes(o.kds_status) && !o.cancelled
         );
         setOrders(active);
       }
@@ -144,10 +144,9 @@ export default function App() {
         if (type === 'new_order') {
           fetchOrders();
         } else if (type === 'order_updated') {
-          if (kds_status === 'delivered') {
+          if (['delivered', 'cancelled'].includes(kds_status)) {
             setOrders(prev => prev.filter(o => o.order_id !== order_id));
           } else {
-            // Mettre à jour le statut localement puis refetch pour être sûr
             setOrders(prev =>
               prev.map(o => o.order_id === order_id ? { ...o, kds_status } : o)
             );
